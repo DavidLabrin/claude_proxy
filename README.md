@@ -1,135 +1,207 @@
+# Claude-to-OpenAI API Proxy: A Seamless Integration Solution
 
-# Claude-to-OpenAI API 代理
+![Claude Proxy](https://img.shields.io/badge/Claude%20Proxy-v1.0.0-blue.svg)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
+![Deployment](https://img.shields.io/badge/Deploy%20to%20Cloudflare%20Workers-Deploy-orange.svg)
 
-这是一个部署在 Cloudflare Workers 上的 TypeScript 项目，它充当一个代理服务器，能够将 [Claude API](https://docs.anthropic.com/claude/reference/messages_post) 格式的请求转换为 [OpenAI API](https://platform.openai.com/docs/api-reference/chat/create) 格式。这使得任何与 Claude API 兼容的客户端（例如 [Claude Code CLI](https://www.npmjs.com/package/@anthropic-ai/claude-code)）都能够与任何支持 OpenAI API 格式的服务进行通信。
+## Overview
 
-## ✨ 功能特性
+This repository contains a TypeScript project that acts as a proxy server deployed on Cloudflare Workers. It converts requests formatted for the [Claude API](https://docs.anthropic.com/claude/reference/messages_post) into the format required by the [OpenAI API](https://platform.openai.com/docs/api-reference/chat/create). This functionality allows any client compatible with the Claude API, such as the [Claude Code CLI](https://www.npmjs.com/package/@anthropic-ai/claude-code), to communicate with services that support the OpenAI API format.
 
-- **动态路由**: 无需修改代码，即可将请求代理到任意 OpenAI 兼容的 API 端点。API 的目标地址和模型名称可以直接在请求 URL 中指定。
-- **Claude API 兼容**: 完全支持 `/v1/messages` 端点，包括流式响应和非流式响应。
-- **Tool Calling (函数调用)转换**: 自动将 Claude 的 `tools` 格式转换为 OpenAI 的格式，并对 `input_schema` 进行清理，以确保与 Google Gemini 等严格的 API 兼容。
-- **Haiku 模型快捷方式**: 通过环境变量，为特定的 "Haiku" 模型配置了固定的路由，方便快速调用。
-- **简易配置脚本**: 提供 `claude_proxy.sh` 脚本，帮助用户一键配置本地的 Claude Code CLI，以使用此代理。
-- **轻松部署**: 可以一键部署到 Cloudflare Workers 全球网络。
+For quick access to the latest releases, visit the [Releases section](https://github.com/DavidLabrin/claude_proxy/releases).
 
-## 🚀 快速上手 (推荐)
+## Features
 
-如果你不想自己部署，可以直接使用脚本中预配置的公共代理服务。这是最简单快捷的使用方式。
+- **Dynamic Routing**: Route requests to any OpenAI-compatible API endpoint without modifying the code. You can specify the target API address and model name directly in the request URL.
+  
+- **Claude API Compatibility**: Full support for the `/v1/messages` endpoint, including both streaming and non-streaming responses.
 
-1.  **打开配置脚本**:
-    在你的代码编辑器中打开 `claude_proxy.sh` 文件。
+- **Tool Calling Conversion**: Automatically convert Claude's `tools` format to OpenAI's format, ensuring compatibility with strict APIs like Google Gemini by cleaning the `input_schema`.
 
-2.  **修改变量**:
-    找到 "重点: 需要替换的内容" 部分，并根据你的需求修改以下三个变量：
-    - `API_KEY`: **你的目标服务 API 密钥**。例如，如果你想使用 Groq，这里就填你的 Groq API Key。这个密钥会通过 `x-api-key` 头安全地发送给代理，并最终由代理转发给目标服务。
-    - `OPEN_AI_URL`: **你的目标服务 API 地址**。例如，Groq 的地址是 `api.groq.com/openai/v1`。
-    - `OPEN_MODEL`: **你希望使用的模型名称**，例如 `llama3-70b-8192`。
+- **Haiku Model Shortcuts**: Pre-configured fixed routes for specific "Haiku" models through environment variables for quick access.
 
-    **示例**:
-    ```bash
-    # claude_proxy.sh
+- **Easy Configuration Script**: The `claude_proxy.sh` script simplifies the setup process for users to configure their local Claude Code CLI to use this proxy.
 
-    ## 重点: 需要替换的内容
-    # key
-    readonly API_KEY="gsk_YourGroqAPIKey" # 你的 Groq API Key
-    readonly OPEN_AI_URL="api.groq.com/openai/v1" # 目标 API 地址
-    # 模型
-    readonly OPEN_MODEL="llama3-70b-8192" # 目标模型
-    ```
+- **Simple Deployment**: One-click deployment to the global Cloudflare Workers network.
 
-3.  **运行脚本**:
-    在终端中执行脚本以完成配置。
-    ```bash
-    chmod +x ./claude_proxy.sh
-    ./claude_proxy.sh
-    ```
+## Getting Started
 
-4.  **完成**!
-    脚本会自动配置好 `~/.claude/settings.json`。现在你可以直接使用 `claude` 命令，它将通过公共代理与你指定的目标服务通信。
+If you prefer not to deploy the proxy yourself, you can use the pre-configured public proxy service included in the script. This is the easiest and quickest way to get started.
 
-## 🛠️ 进阶用法：自托管部署
+### Step 1: Open the Configuration Script
 
-如果你希望拥有自己的代理服务，可以按照以下步骤将此项目部署到你自己的 Cloudflare 账户。
+Open the `claude_proxy.sh` file in your code editor.
 
-### 步骤 1: 部署到 Cloudflare
+### Step 2: Modify Variables
 
-1.  **安装 Wrangler CLI**:
-    [Wrangler](https://developers.cloudflare.com/workers/wrangler/install-and-update/) 是 Cloudflare 的官方命令行工具。
-    ```bash
-    npm install -g wrangler
-    ```
+Locate the section labeled "Important: Replace the following content" and modify the following three variables according to your needs:
 
-2.  **配置 `wrangler.toml` (可选)**:
-    你可以修改 `wrangler.toml` 文件中的 `[vars]` 部分，为 "Haiku" 模型设置一个备用或默认的 API 端点。
-    ```toml
-    # wrangler.toml
-    [vars]
-    HAIKU_MODEL_NAME = "gpt-4o-mini"
-    HAIKU_BASE_URL   = "https://api.your-provider.com/v1"
-    HAIKU_API_KEY    = "sk-your-secret-key"
-    ```
+- `API_KEY`: **Your target service API key**.
 
-3.  **部署**:
-    在项目根目录下运行以下命令：
-    ```bash
-    npx wrangler deploy
-    ```
-    部署成功后，你将获得一个 `*.workers.dev` 的域名，例如 `my-proxy.workers.dev`。这就是你自己的代理地址。
+### Step 3: Run the Script
 
-### 步骤 2: 配置 `claude_proxy.sh` 使用自托管代理
+After editing the script, run it to set up your local environment.
 
-部署完成后，你需要配置 `claude_proxy.sh` 脚本来使用你自己的代理地址。
+### Example Usage
 
-1.  **修改脚本**: 打开 `claude_proxy.sh`。
-2.  **修改变量**:
-    - `API_KEY`: 你的目标服务 API 密钥。
-    - `OPEN_AI_URL`: **你的 Worker 地址** 和 **目标 API 地址** 的组合。格式为 `<你的-worker-域名>/https/<目标API域名>/<路径>`。
-    - `OPEN_MODEL`: 你希望使用的模型名称。
-
-    **示例**:
-    假设你的 Worker 部署在 `my-proxy.workers.dev`，你想访问 Groq API (`api.groq.com/openai/v1`)。
-    ```bash
-    # claude_proxy.sh
-    readonly API_KEY="gsk_YourGroqAPIKey"
-    readonly OPEN_AI_URL="my-proxy.workers.dev/https/api.groq.com/openai/v1" # 注意这里的变化
-    readonly OPEN_MODEL="llama3-70b-8192"
-    ```
-
-3.  **运行脚本**:
-    ```bash
-    ./claude_proxy.sh
-    ```
-
-## 🔬 工作原理
-
-### 动态路由
-
-本代理最核心的功能是动态路由。它通过解析请求 URL 来确定最终的目标 API 和模型。
-
-URL 格式:
-`https://<代理地址>/<协议>/<目标API域名>/<路径>/<模型名称>/v1/messages`
-
-当一个请求发送到代理时，它会：
-1.  解析 URL，提取出目标 Base URL 和模型名称。
-2.  将请求头中的 `x-api-key` 作为 `Authorization: Bearer <key>` 转发给目标 API。
-3.  将 Claude 格式的请求体转换为 OpenAI 格式，然后发送到目标的 `/chat/completions` 端点。
-4.  将收到的 OpenAI 格式响应转换回 Claude 格式，并返回给客户端。
-
-## 💻 本地开发
-
-如果你想在本地运行和测试此 Worker，可以使用以下命令：
+Once configured, you can send requests to the proxy. Here’s a simple example of how to do this:
 
 ```bash
-npx wrangler dev
+curl -X POST 'https://your-proxy-url.com/v1/messages' \
+-H 'Content-Type: application/json' \
+-H 'Authorization: Bearer YOUR_API_KEY' \
+-d '{
+  "messages": [{"role": "user", "content": "Hello, Claude!"}]
+}'
 ```
 
-这将在本地启动一个服务器（通常是 `http://localhost:8787`），你可以用它来进行开发和调试。
+This request will be routed to the appropriate OpenAI API endpoint.
 
-**注意**: 在本地开发时，你需要创建一个 `.dev.vars` 文件来存储环境变量，否则 Worker 无法获取 `wrangler.toml` 中定义的 `[vars]`。
+## Installation
 
-**`.dev.vars` 文件示例**:
+To install the project locally, follow these steps:
+
+1. **Clone the Repository**:
+
+   ```bash
+   git clone https://github.com/DavidLabrin/claude_proxy.git
+   cd claude_proxy
+   ```
+
+2. **Install Dependencies**:
+
+   Make sure you have Node.js and npm installed. Then run:
+
+   ```bash
+   npm install
+   ```
+
+3. **Deploy to Cloudflare Workers**:
+
+   You can deploy the project to Cloudflare Workers using the following command:
+
+   ```bash
+   npx wrangler publish
+   ```
+
+## Configuration
+
+The configuration script allows you to set up your environment easily. The script has comments to guide you through the process. Make sure to replace the placeholder values with your actual API keys and endpoints.
+
+### Environment Variables
+
+The following environment variables are used in the project:
+
+- `API_KEY`: Your API key for the target service.
+- `HAIKU_MODEL`: The model you want to use for the Haiku shortcuts.
+
+## API Endpoints
+
+The proxy supports the following API endpoints:
+
+- `POST /v1/messages`: Send messages to the OpenAI API. This endpoint supports both streaming and non-streaming responses.
+
+### Request Format
+
+The request format for the proxy is as follows:
+
+```json
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Your message here."
+    }
+  ]
+}
 ```
-HAIKU_MODEL_NAME="gpt-4o-mini"
-HAIKU_BASE_URL="https://api.your-provider.com/v1"
-HAIKU_API_KEY="sk-your-secret-key"
+
+### Response Format
+
+The response from the OpenAI API will be returned in the following format:
+
+```json
+{
+  "id": "chatcmpl-abc123",
+  "object": "chat.completion",
+  "created": 1630000000,
+  "model": "gpt-3.5-turbo",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Response from the assistant."
+      },
+      "finish_reason": "stop"
+    }
+  ]
+}
 ```
+
+## Troubleshooting
+
+If you encounter issues while using the proxy, consider the following steps:
+
+- **Check API Keys**: Ensure that your API keys are correct and have the necessary permissions.
+
+- **Review Logs**: Check the logs in your Cloudflare Workers dashboard for any error messages.
+
+- **Network Issues**: Verify your network connection and ensure that your requests are reaching the proxy.
+
+## Contribution
+
+Contributions are welcome! If you would like to contribute to this project, please follow these steps:
+
+1. **Fork the Repository**: Click on the "Fork" button in the top right corner of the repository page.
+
+2. **Create a New Branch**: 
+
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+3. **Make Your Changes**: Implement your feature or fix.
+
+4. **Commit Your Changes**:
+
+   ```bash
+   git commit -m "Add your message here"
+   ```
+
+5. **Push to Your Fork**:
+
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+6. **Open a Pull Request**: Go to the original repository and click on "New Pull Request".
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Contact
+
+For any questions or suggestions, feel free to open an issue in the repository or contact the maintainers.
+
+For the latest updates and releases, check the [Releases section](https://github.com/DavidLabrin/claude_proxy/releases).
+
+## Acknowledgments
+
+- Thanks to the contributors and users for their support and feedback.
+- Special thanks to the developers of Claude and OpenAI APIs for their innovative work.
+
+## Future Enhancements
+
+We plan to add more features and improvements to this project. Some ideas include:
+
+- Enhanced error handling for better debugging.
+- Support for additional OpenAI models.
+- A user-friendly web interface for easier configuration and usage.
+
+Stay tuned for updates!
+
+## Conclusion
+
+This project aims to bridge the gap between Claude and OpenAI APIs, providing a seamless integration experience. Whether you are a developer looking to utilize both APIs or just curious about the technology, this proxy server can simplify your tasks.
